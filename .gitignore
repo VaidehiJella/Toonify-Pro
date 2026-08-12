@@ -1,0 +1,24 @@
+# Secrets
+.streamlit/secrets.toml
+.env
+.env.*
+!.env.example
+
+# Local app data / user-generated content
+toonify_pro.db
+*.db
+user_albums/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
