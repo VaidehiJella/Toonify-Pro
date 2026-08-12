@@ -1113,7 +1113,8 @@ def init_session_state():
         'payment_plan': None,
         'payment_amount': 0.0,
         'show_signup': False,
-        'processing_time': 0.0
+        'processing_time': 0.0,
+        'uploaded_file_id': None
     }
     
     for var, default_value in session_vars.items():
@@ -1333,19 +1334,34 @@ def show_payment_section():
     
     
     # Payment buttons
+        # Payment buttons
+        # Payment buttons
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
-        if st.button("💳 Select Basic - $2.99", key="basic", use_container_width=True):
+        if st.button(
+            "💳 Select Basic - $2.99",
+            key="payment_plan_basic",
+            width="stretch"
+        ):
             process_payment(2.99, "basic")
-    
+
     with col2:
-        if st.button("💳 Select Premium - $4.99", key="premium", use_container_width=True):
+        if st.button(
+            "💳 Select Premium - $4.99",
+            key="payment_plan_premium",
+            width="stretch"
+        ):
             process_payment(4.99, "premium")
-    
+
     with col3:
-        if st.button("💳 Select Pro - $7.99", key="pro", use_container_width=True):
+        if st.button(
+            "💳 Select Pro - $7.99",
+            key="payment_plan_pro",
+            width="stretch"
+        ):
             process_payment(7.99, "pro")
+    
 
 def process_payment(amount: float, plan_type: str):
     """Create and confirm a real Stripe test-mode PaymentIntent."""
@@ -1393,7 +1409,7 @@ def process_payment(amount: float, plan_type: str):
         st.balloons()
         st.rerun()
 
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         message = getattr(e, "user_message", None) or str(e)
         st.error(f"❌ Stripe test payment failed: {message}")
     except Exception as e:
@@ -1569,7 +1585,7 @@ def show_feature_showcase():
 def main():
     init_session_state()
     # ------------------ ADMIN LOGIN CHECK ------------------ #
-    page = st.sidebar.radio("Navigation", ["Home", "Album", "Payment", "Profile", "Admin"])
+    page = st.sidebar.radio("Navigation", ["Home", "Album",  "Profile", "Admin"])
 
     if page == "Admin":
         if not st.session_state.get("is_admin", False):
@@ -1607,9 +1623,6 @@ def main():
         else:
             st.info("No images yet.")
 
-    # ------------------ PAYMENT PAGE ------------------ #
-    if page == "Payment":
-        show_payment_section()
 
 
     """Main application with enhanced features."""
@@ -1657,21 +1670,31 @@ def main():
                     st.error(f"❌ {validation_message}")
                     return
 
-                try:
+            try:
+                current_file_id = (
+                    uploaded_file.name,
+                    uploaded_file.size
+                )
+
+                # Only load/reset when a NEW image is uploaded
+                if st.session_state.uploaded_file_id != current_file_id:
                     image = Image.open(uploaded_file)
+
                     st.session_state.original_image = np.array(image)
-                    st.success("✅ Image loaded successfully!")
-
-                    # Show image info
-                    st.info(f"📏 Size: {image.size[0]}×{image.size[1]} pixels")
-
-                    # Reset states for new image
-                    st.session_state.payment_completed = False
                     st.session_state.processed_image = None
+                    st.session_state.payment_completed = False
+                    st.session_state.payment_plan = None
+                    st.session_state.payment_amount = 0.0
+                    st.session_state.uploaded_file_id = current_file_id
 
-                except Exception as e:
-                    st.error(f"❌ Error loading image: {str(e)}")
-                    return
+                    st.success("✅ Image loaded successfully!")
+                    st.info(
+                        f"📏 Size: {image.size[0]}×{image.size[1]} pixels"
+                    )
+
+            except Exception as e:
+                st.error(f"❌ Error loading image: {str(e)}")
+                return
 
             # Filter controls (only if an image is uploaded)
             if st.session_state.original_image is not None:
