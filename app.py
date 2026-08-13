@@ -59,6 +59,7 @@ def get_secret(name: str, default: str = "") -> str:
 
 STRIPE_PUBLIC_KEY = get_secret("STRIPE_PUBLIC_KEY")
 STRIPE_SECRET_KEY = get_secret("STRIPE_SECRET_KEY")
+ADMIN_PASSWORD = get_secret("ADMIN_PASSWORD")
 
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
@@ -644,31 +645,31 @@ class SimpleAuthManager:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            
+        
             cursor.execute("""
-                SELECT id, username, password_hash, first_name, last_name, 
+                SELECT id, username, email, password_hash, first_name, last_name, 
                        downloads_count, total_spent FROM users 
-                WHERE email = ? AND is_active = TRUE
+                       WHERE email = ? AND is_active = TRUE
             """, (email,))
-            
+        
             user_data = cursor.fetchone()
-            if not user_data or not self.verify_password(password, user_data[2]):
+            if not user_data or not self.verify_password(password, user_data[3]):
                 conn.close()
                 return None
-            
-            # Update last login
+        
             cursor.execute("UPDATE users SET last_login = ? WHERE id = ?", 
-                         (datetime.now().isoformat(), user_data[0]))
+                     (datetime.now().isoformat(), user_data[0]))
             conn.commit()
             conn.close()
-            
+        
             return {
                 'id': user_data[0],
                 'username': user_data[1],
-                'first_name': user_data[3],
-                'last_name': user_data[4],
-                'downloads_count': user_data[5],
-                'total_spent': float(user_data[6])
+                'email': user_data[2],
+                'first_name': user_data[4],
+                'last_name': user_data[5],
+                'downloads_count': user_data[6],
+                'total_spent': float(user_data[7])
             }
             
         except Exception as e:
@@ -1589,29 +1590,36 @@ def main():
 
     if page == "Admin":
         if not st.session_state.get("is_admin", False):
-            if st.session_state.user_authenticated and st.session_state.user_data.get("email") == "jellavaidehi49@gmail.com":
+            if not st.session_state.user_authenticated:
+                st.warning("⚠️ Please log in first to access the Admin page.")
+            elif st.session_state.user_data.get("email", "").strip().lower() != "jellavaidehi49@gmail.com":
+                st.error(f"❌ Access denied. Logged in as: {st.session_state.user_data.get('email', 'unknown')}")
+            else:
                 st.sidebar.markdown("### 🔑 Admin Access")
                 admin_pw = st.sidebar.text_input("Enter Admin Password", type="password")
-                if admin_pw == "Virat@18":
-                    st.session_state.is_admin = True
-                    st.success("✅ Admin access granted")
-                    st.rerun()
+                if admin_pw:
+                    if admin_pw == ADMIN_PASSWORD:
+                        st.session_state.is_admin = True
+                        st.success("✅ Admin access granted")
+                        st.rerun()
+                    else:
+                        st.sidebar.error("❌ Incorrect admin password")
 
-    if st.session_state.get("is_admin", False):
-        st.title("📊 Admin Dashboard")
-        users, images, data = SimpleAuthManager().get_stats()
-        st.metric("Total Users", users)
-        st.metric("Images Converted", images)
+        if st.session_state.get("is_admin", False):
+            st.title("📊 Admin Dashboard")
+            users, images, data = SimpleAuthManager().get_stats()
+            st.metric("Total Users", users)
+            st.metric("Images Converted", images)
 
-        if data:
-            import matplotlib.pyplot as plt
-            dates = [d[0] for d in data]
-            counts = [d[1] for d in data]
-            fig, ax = plt.subplots()
-            ax.plot(dates, counts, marker="o")
-            ax.set_title("Images Converted Over Time")
-            st.pyplot(fig)
-        return
+            if data:
+                import matplotlib.pyplot as plt
+                dates = [d[0] for d in data]
+                counts = [d[1] for d in data]
+                fig, ax = plt.subplots()
+                ax.plot(dates, counts, marker="o")
+                ax.set_title("Images Converted Over Time")
+                st.pyplot(fig)
+            return
 
     # ------------------ ALBUM PAGE ------------------ #
     if page == "Album":
@@ -1670,31 +1678,31 @@ def main():
                     st.error(f"❌ {validation_message}")
                     return
 
-            try:
-                current_file_id = (
-                    uploaded_file.name,
-                    uploaded_file.size
-                )
-
-                # Only load/reset when a NEW image is uploaded
-                if st.session_state.uploaded_file_id != current_file_id:
-                    image = Image.open(uploaded_file)
-
-                    st.session_state.original_image = np.array(image)
-                    st.session_state.processed_image = None
-                    st.session_state.payment_completed = False
-                    st.session_state.payment_plan = None
-                    st.session_state.payment_amount = 0.0
-                    st.session_state.uploaded_file_id = current_file_id
-
-                    st.success("✅ Image loaded successfully!")
-                    st.info(
-                        f"📏 Size: {image.size[0]}×{image.size[1]} pixels"
+                try:
+                    current_file_id = (
+                        uploaded_file.name,
+                        uploaded_file.size
                     )
 
-            except Exception as e:
-                st.error(f"❌ Error loading image: {str(e)}")
-                return
+                   # Only load/reset when a NEW image is uploaded
+                    if st.session_state.uploaded_file_id != current_file_id:
+                        image = Image.open(uploaded_file)
+
+                        st.session_state.original_image = np.array(image)
+                        st.session_state.processed_image = None
+                        st.session_state.payment_completed = False
+                        st.session_state.payment_plan = None
+                        st.session_state.payment_amount = 0.0
+                        st.session_state.uploaded_file_id = current_file_id
+
+                        st.success("✅ Image loaded successfully!")
+                        st.info(
+                            f"📏 Size: {image.size[0]}×{image.size[1]} pixels"
+                        )
+
+                except Exception as e:
+                    st.error(f"❌ Error loading image: {str(e)}")
+                    return
 
             # Filter controls (only if an image is uploaded)
             if st.session_state.original_image is not None:
